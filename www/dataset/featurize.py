@@ -171,7 +171,7 @@ def add_bert_features_art(dataset, tokenizer, seq_length, add_segment_ids=False)
   return deepcopy(dataset)
 
 # Tokenize, numericalize, and pad input dataset for tiered "reasoning"
-def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=False):
+def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=False, add_entnet_query=False):
   nlp = spacy.load("en_core_web_sm")
   # print(len(dataset['train']))
   # print(len(dataset['train'][0]['stories'])) 
@@ -201,6 +201,13 @@ def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=Fal
                                           truncation=True)
             input_ids = inputs['input_ids']
 
+            if add_entnet_query:
+              query_inputs = tokenizer.encode_plus(ex['entity'],
+                                          add_special_tokens=True,
+                                          max_length=1,
+                                          truncation=True)
+              query_input_ids = query_inputs['input_ids']
+
             if add_segment_ids and 'token_type_ids' in inputs:
               token_type_ids = inputs['token_type_ids']
             else:
@@ -209,6 +216,10 @@ def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=Fal
             # Don't want to truncate any data
             assert not('num_truncated_tokens' in inputs and inputs['num_truncated_tokens'] > 0)
             assert len(input_ids) <= seq_length
+
+            if add_entnet_query:
+              assert not('num_truncated_tokens' in query_inputs and query_inputs['num_truncated_tokens'] > 0)
+              assert len(query_input_ids) <= 1
 
             # Pad to sequence length of 128
             padding_length = seq_length - len(input_ids)
@@ -229,6 +240,9 @@ def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=Fal
           dataset[p][i]['stories'][s_idx]['entities'][ent_idx]['input_mask'] = all_input_mask
           if add_segment_ids and 'token_type_ids' in inputs:
             dataset[p][i]['stories'][s_idx]['entities'][ent_idx]['segment_ids'] = all_segment_ids
+
+          if add_entnet_query:
+            dataset[p][i]['stories'][s_idx]['entities'][ent_idx]['query_input_ids'] = query_input_ids
 
       bar_idx += 1
       bar.update(bar_idx)

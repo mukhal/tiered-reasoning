@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 
@@ -16,21 +17,23 @@ class OutputModule(nn.Module):
         self.num_labels = config.num_labels
         self.input_all_tokens = input_all_tokens
 
-    def forward(self, states):
+    def forward(self, entity_encoding, states):
+        # EntNet output module takes a query string - we will use the encoding of the specific entity
+        # hopefully the gated cells with learn about the states of different entities and then given the query
+        # string of the entity name the states can be retrieved.
         chunked_states = torch.chunk(states, self.num_blocks)
 
         if self.input_all_tokens:
-          x = features[:, 0, :]  # take <s> token (equiv. to [CLS])
+          x = entity_encoding[:, 0, :]  # take <s> token (equiv. to [CLS])
         else:
-          x = features
-        x = self.dropout(x)
-        x = self.dense(x)
-        x = torch.tanh(x)
-        if return_embeddings:
-          emb = x
-        x = self.dropout(x)
-        x = self.out_proj(x)
-        if not return_embeddings:
-          return x
-        else:
-          return x, emb
+          x = entity_encoding
+
+        p_vals = []
+        for h_i in enumerate(chunked_states):
+            p_i = torch.softmax(x.t().matmul(h_i), dim=0)
+            p_vals.append(p_i)
+
+        p = torch.cat(p_vals)
+
+        # Skip the calculation of u and y since p can be viewed as a distribution if potential answers
+        return p
