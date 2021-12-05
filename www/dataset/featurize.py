@@ -240,6 +240,7 @@ def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=Fal
 
             if add_entnet_query:
               # No need to use input mask due to behaviour of query string in EntNet but would be added here if needed
+              query_input_ids = query_input_ids + ([0] * (entnet_max_seq_len - len(query_input_ids)))
               all_query_input_ids[j, :] = query_input_ids
 
             attention_mask = [1] * input_length + ([0] * padding_length) # Mask will zero out padding tokens
