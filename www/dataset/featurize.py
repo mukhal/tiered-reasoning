@@ -40,7 +40,7 @@ def get_tensor_dataset(dataset, label_key='plausible', add_spans=False, add_segm
   return tensor_dataset
 
 # Creates tensor dataset from featurized dataset
-def get_tensor_dataset_tiered(dataset, max_sentences, add_segment_ids=False):
+def get_tensor_dataset_tiered(dataset, max_sentences, add_segment_ids=False, add_entnet_query=False):
   # All inputs should be shaped something like (# stories, # )
   max_entities = max([len(story['entities']) for ex_2s in dataset for story in ex_2s['stories']])
   # max_sentences = max([len(ex['sentences']) for ex_2s in dataset for ex in ex_2s['stories']])
@@ -70,9 +70,14 @@ def get_tensor_dataset_tiered(dataset, max_sentences, add_segment_ids=False):
   # print(all_spans.shape)
   # print(all_label_ids.shape)
 
+  if add_entnet_query:
+    all_query_input_ids = torch.tensor([[[[story['entities'][e]['query_input_ids'][s] if e < len(story['entities']) else np.zeros((seq_length)) for s in range(max_sentences)] for e in range(max_entities)] for story in ex_2s['stories']] for ex_2s in dataset])
+
   if add_segment_ids and 'segment_ids' in dataset[0]:
     all_input_ids = torch.tensor([[[[story['entities'][e]['segment_ids'][s] if e < len(story['entities']) else np.zeros((seq_length)) for s in range(max_sentences)] for e in range(max_entities)] for story in ex_2s['stories']] for ex_2s in dataset])
     tensor_dataset = TensorDataset(all_input_ids, all_lengths, num_entities, all_input_mask, all_attributes, all_preconditions, all_effects, all_spans, all_label_ids, all_segment_ids)
+  elif add_entnet_query:
+    tensor_dataset = TensorDataset(all_input_ids, all_lengths, num_entities, all_input_mask, all_attributes, all_preconditions, all_effects, all_spans, all_label_ids, all_query_input_ids)
   else:
     tensor_dataset = TensorDataset(all_input_ids, all_lengths, num_entities, all_input_mask, all_attributes, all_preconditions, all_effects, all_spans, all_label_ids)
   return tensor_dataset
