@@ -8,6 +8,9 @@ from time import sleep
 from copy import deepcopy
 import numpy as np
 
+# Global variable defining the maximum length of the encoded entities
+entnet_max_seq_len = 10
+
 # Creates tensor dataset from featurized dataset
 def get_tensor_dataset(dataset, label_key='plausible', add_spans=False, add_segment_ids=False, masked_lm_params=None):
   # print(len(dataset[0]['input_ids']))
@@ -71,7 +74,7 @@ def get_tensor_dataset_tiered(dataset, max_sentences, add_segment_ids=False, add
   # print(all_label_ids.shape)
 
   if add_entnet_query:
-    all_query_input_ids = torch.tensor([[[[story['entities'][e]['query_input_ids'][s] if e < len(story['entities']) else np.zeros((seq_length)) for s in range(max_sentences)] for e in range(max_entities)] for story in ex_2s['stories']] for ex_2s in dataset])
+    all_query_input_ids = torch.tensor([[[[story['entities'][e]['query_input_ids'][s] if e < len(story['entities']) else np.zeros((entnet_max_seq_len)) for s in range(max_sentences)] for e in range(max_entities)] for story in ex_2s['stories']] for ex_2s in dataset])
 
   if add_segment_ids and 'segment_ids' in dataset[0]:
     all_input_ids = torch.tensor([[[[story['entities'][e]['segment_ids'][s] if e < len(story['entities']) else np.zeros((seq_length)) for s in range(max_sentences)] for e in range(max_entities)] for story in ex_2s['stories']] for ex_2s in dataset])
@@ -197,6 +200,8 @@ def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=Fal
           all_input_mask = np.zeros((max_story_length, seq_length))
           if add_segment_ids:
             all_segment_ids = np.zeros((max_story_length, seq_length))
+          if add_entnet_query:
+            all_query_input_ids = np.zeros((max_story_length, entnet_max_seq_len))
 
           for j, sent in enumerate(ex['sentences']):
             inputs = tokenizer.encode_plus(ex['entity'], 
@@ -208,7 +213,6 @@ def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=Fal
 
             if add_entnet_query:
               # when the entities are encoded the maximum length is 10
-              entnet_max_seq_len = 10
               query_inputs = tokenizer.encode_plus(ex['entity'],
                                           add_special_tokens=True,
                                           max_length=entnet_max_seq_len,
@@ -234,6 +238,10 @@ def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=Fal
             input_ids = input_ids + ([0] * padding_length)
             all_input_ids[j, :] = input_ids
 
+            if add_entnet_query:
+              # No need to use input mask due to behaviour of query string in EntNet but would be added here if needed
+              all_query_input_ids[j, :] = query_input_ids
+
             attention_mask = [1] * input_length + ([0] * padding_length) # Mask will zero out padding tokens
             all_input_mask[j, :] = attention_mask
             
@@ -249,7 +257,7 @@ def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=Fal
             dataset[p][i]['stories'][s_idx]['entities'][ent_idx]['segment_ids'] = all_segment_ids
 
           if add_entnet_query:
-            dataset[p][i]['stories'][s_idx]['entities'][ent_idx]['query_input_ids'] = query_input_ids
+            dataset[p][i]['stories'][s_idx]['entities'][ent_idx]['query_input_ids'] = all_query_input_ids
 
       bar_idx += 1
       bar.update(bar_idx)
