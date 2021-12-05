@@ -202,9 +202,11 @@ def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=Fal
             input_ids = inputs['input_ids']
 
             if add_entnet_query:
+              # when the entities are encoded the maximum length is 10
+              entnet_max_seq_len = 10
               query_inputs = tokenizer.encode_plus(ex['entity'],
                                           add_special_tokens=True,
-                                          max_length=1,
+                                          max_length=entnet_max_seq_len,
                                           truncation=True)
               query_input_ids = query_inputs['input_ids']
 
@@ -219,7 +221,7 @@ def add_bert_features_tiered(dataset, tokenizer, seq_length, add_segment_ids=Fal
 
             if add_entnet_query:
               assert not('num_truncated_tokens' in query_inputs and query_inputs['num_truncated_tokens'] > 0)
-              assert len(query_input_ids) <= 1
+              assert len(query_input_ids) <= entnet_max_seq_len
 
             # Pad to sequence length of 128
             padding_length = seq_length - len(input_ids)
