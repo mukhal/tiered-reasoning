@@ -285,7 +285,10 @@ class TieredModelPipeline(nn.Module):
               input_ids.view(batch_size * num_stories * num_entities * num_sents, -1).long(),
               attention_mask=attention_mask.view(batch_size * num_stories * num_entities * num_sents, -1) if attention_mask is not None else None,
               output_hidden_states=False)
-      
+
+    if self.use_entnet:
+      entnet_inputs = input_ids.view(num_sents, batch_size * num_stories * num_entities, -1).long()
+
     if len(out[0].shape) < 3:
       out[0] = out[0].unsqueeze(0)
     out = out[0][:,0,:] # entity-sentence embeddings
@@ -323,7 +326,7 @@ class TieredModelPipeline(nn.Module):
         out_s = self.precondition_classifiers[i](out, return_embeddings=False)
       else:
         assert entity_encoding is not None
-        out_s = self.precondition_classifiers[i](out, entity_encoding, states)
+        out_s = self.precondition_classifiers[i](entnet_inputs, entity_encoding)
 
       with torch.no_grad(): # Don't allow backprop from conflict detection to state classifiers
         out_preconditions_softmax = torch.cat((out_preconditions_softmax, out_s), dim=-1)
@@ -354,7 +357,11 @@ class TieredModelPipeline(nn.Module):
     out_effects = torch.zeros((batch_size * num_stories * num_entities * num_sents, self.num_attributes)).to(self.embedding.device)
     out_effects_softmax = torch.tensor([]).to(self.embedding.device)
     for i in range(self.num_attributes):
-      out_s = self.effect_classifiers[i](out, return_embeddings=False)
+      if not self.use_entnet:
+        out_s = self.effect_classifiers[i](out, return_embeddings=False)
+      else:
+        assert entity_encoding is not None
+        out_s = self.effect_classifiers[i](entnet_inputs, entity_encoding)
       with torch.no_grad(): # Don't allow backprop from conflict detection to state classifiers
         out_effects_softmax = torch.cat((out_effects_softmax, out_s), dim=-1)
 
