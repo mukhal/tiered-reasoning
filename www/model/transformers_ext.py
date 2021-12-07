@@ -33,6 +33,9 @@ from transformers.modeling_utils import (
 from transformers.utils import logging
 from transformers import RobertaConfig
 
+from www.model.EntNetImplementation.ent_net import EntNetHead
+
+
 class DebertaForMultipleChoice(DebertaPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
@@ -164,7 +167,7 @@ class ClassificationHead(nn.Module):
 
 # Tiered model proposed for TRIP
 class TieredModelPipeline(nn.Module):
-  def __init__(self, embedding, num_sents, num_attributes, labels_per_att, config_class, model_name, device, ablation=[], loss_weights=[0.0, 0.4, 0.4, 0.2, 0.0]): # labels_per_att is a dictionary mapping attribute index to number of labels
+  def __init__(self, embedding, num_sents, num_attributes, labels_per_att, config_class, model_name, device, ablation=[], loss_weights=[0.0, 0.4, 0.4, 0.2, 0.0], use_entnet=False): # labels_per_att is a dictionary mapping attribute index to number of labels
     super().__init__()
 
     # Embedding and dropout
@@ -189,8 +192,12 @@ class TieredModelPipeline(nn.Module):
     self.effect_classifiers = []
     for i in range(num_attributes):
       config.num_labels = labels_per_att[i]
-      self.precondition_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
-      self.effect_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
+      if not use_entnet:
+        self.precondition_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
+        self.effect_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
+      else:
+        self.precondition_classifiers.append(EntNetHead(config, num_blocks=15, input_all_tokens=False).to(device))
+        self.effect_classifiers.append(EntNetHead(config, num_blocks=15, input_all_tokens=False).to(device))
     
     # Conflict detector components
     embedding_proj_size = 256
@@ -242,8 +249,12 @@ class TieredModelPipeline(nn.Module):
     self.ablation = ablation
     self.loss_weights = loss_weights
 
+    self.use_entnet = use_entnet
+    if use_entnet:
+        self.entnet_head = EntNetHead(config)
 
-  def forward(self, input_ids, input_lengths, input_entities, attention_mask=None, token_type_ids=None, attributes=None, preconditions=None, effects=None, conflicts=None, labels=None, training=False):
+
+  def forward(self, input_ids, input_lengths, input_entities, attention_mask=None, token_type_ids=None, attributes=None, preconditions=None, effects=None, conflicts=None, labels=None, training=False, entity_encoding=None):
 
     batch_size, num_stories, num_entities, num_sents, seq_length = input_ids.shape
     assert num_stories == 2
@@ -308,7 +319,11 @@ class TieredModelPipeline(nn.Module):
     out_preconditions = torch.zeros((batch_size * num_stories * num_entities * num_sents, self.num_attributes)).to(self.embedding.device)
     out_preconditions_softmax = torch.tensor([]).to(self.embedding.device)
     for i in range(self.num_attributes):
-      out_s = self.precondition_classifiers[i](out, return_embeddings=False)
+      if not self.use_entnet:
+        out_s = self.precondition_classifiers[i](out, return_embeddings=False)
+      else:
+        assert entity_encoding is not None
+        out_s = self.precondition_classifiers[i](out, entity_encoding, states)
 
       with torch.no_grad(): # Don't allow backprop from conflict detection to state classifiers
         out_preconditions_softmax = torch.cat((out_preconditions_softmax, out_s), dim=-1)

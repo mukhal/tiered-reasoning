@@ -123,7 +123,7 @@ def train_epoch(model, optimizer, train_dataloader, device, list_output=False, n
     return total_loss / len(train_dataloader), model
 
 # Train a state classification pipeline for one epoch
-def train_epoch_tiered(model, optimizer, train_dataloader, device, seg_mode=False, return_losses=False, build_learning_curves=False, val_dataloader=None, train_lc_data=None, val_lc_data=None):
+def train_epoch_tiered(model, optimizer, train_dataloader, device, seg_mode=False, return_losses=False, build_learning_curves=False, val_dataloader=None, train_lc_data=None, val_lc_data=None, use_entnet=False):
   t0 = time.time()
 
   total_loss = 0
@@ -166,6 +166,7 @@ def train_epoch_tiered(model, optimizer, train_dataloader, device, seg_mode=Fals
     effects = batch[6].long().to(device)
     conflicts = batch[7].long().to(device)
     labels = batch[8].long().to(device)
+    entity_encoding = batch[9].long().to(device)
 
     if seg_mode:
       segment_ids = batch[8].to(device)
@@ -174,17 +175,31 @@ def train_epoch_tiered(model, optimizer, train_dataloader, device, seg_mode=Fals
 
     # Forward pass
     model.zero_grad()
-    out = model(input_ids, 
-                input_lengths,
-                input_entities,
-                attention_mask=input_mask,
-                token_type_ids=segment_ids,
-                attributes=attributes,
-                preconditions=preconditions,
-                effects=effects,
-                conflicts=conflicts,
-                labels=labels,
-                training=True)
+    if not use_entnet:
+      out = model(input_ids,
+                  input_lengths,
+                  input_entities,
+                  attention_mask=input_mask,
+                  token_type_ids=segment_ids,
+                  attributes=attributes,
+                  preconditions=preconditions,
+                  effects=effects,
+                  conflicts=conflicts,
+                  labels=labels,
+                  training=True)
+    else:
+      out = model(input_ids,
+                  input_lengths,
+                  input_entities,
+                  attention_mask=input_mask,
+                  token_type_ids=segment_ids,
+                  attributes=attributes,
+                  preconditions=preconditions,
+                  effects=effects,
+                  conflicts=conflicts,
+                  labels=labels,
+                  training=True,
+                  entity_encoding=entity_encoding)
 
     loss = out['total_loss']
               
