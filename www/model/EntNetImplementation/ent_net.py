@@ -15,6 +15,7 @@ class EntNetHead(nn.Module):
     self = super().to(*args, **kwargs)
     self.memory_cell = self.memory_cell.to(*args, **kwargs)
     self.output_module = self.output_module.to(*args, **kwargs)
+    return self
 
   def forward(self, features_sentence, features_entity):
     # Input is of shape (num_sents, batch_size * num_stories * num_entities, self.num_attributes)
