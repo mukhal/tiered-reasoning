@@ -250,9 +250,6 @@ class TieredModelPipeline(nn.Module):
     self.loss_weights = loss_weights
 
     self.use_entnet = use_entnet
-    if use_entnet:
-        self.entnet_head = EntNetHead(config)
-
 
   def forward(self, input_ids, input_lengths, input_entities, attention_mask=None, token_type_ids=None, attributes=None, preconditions=None, effects=None, conflicts=None, labels=None, training=False, entity_encoding=None):
 
@@ -272,27 +269,31 @@ class TieredModelPipeline(nn.Module):
     length_mask = length_mask.view(batch_size * num_stories * num_entities, num_sents)
 
     # 1) Embed the inputs
+    if self.use_entnet:
+      shaped_inputs = input_ids.transpose(0, 3).reshape(num_sents * batch_size * num_stories * num_entities, -1).long()
+    else:
+      shaped_inputs = input_ids.view(batch_size * num_stories * num_entities * num_sents, -1).long()
+
     if token_type_ids is not None:
       print(token_type_ids)
       print(token_type_ids.shape)
       out = self.embedding(
-              input_ids.view(batch_size * num_stories * num_entities * num_sents, -1).long(),
+              shaped_inputs,
               attention_mask=attention_mask.view(batch_size * num_stories * num_entities * num_sents, -1) if attention_mask is not None else None,
               token_type_ids=token_type_ids.view(batch_size * num_stories * num_entities * num_sents, -1),
               output_hidden_states=False)
     else:
       out = self.embedding(
-              input_ids.view(batch_size * num_stories * num_entities * num_sents, -1).long(),
+              shaped_inputs,
               attention_mask=attention_mask.view(batch_size * num_stories * num_entities * num_sents, -1) if attention_mask is not None else None,
               output_hidden_states=False)
-
-    if self.use_entnet:
-      entnet_inputs = input_ids.view(num_sents, batch_size * num_stories * num_entities, -1).long()
 
     if len(out[0].shape) < 3:
       out[0] = out[0].unsqueeze(0)
     out = out[0][:,0,:] # entity-sentence embeddings
 
+    if self.use_entnet:
+      entnet_inputs = input_ids.view(num_sents, batch_size * num_stories * num_entities, -1).long()
 
     # 2) State classification
     return_dict = {}

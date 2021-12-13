@@ -11,6 +11,11 @@ class EntNetHead(nn.Module):
     self.output_module = OutputModule(config, input_all_tokens)
     self.output_layer = nn.Linear(config.hidden_size, config.num_labels)  # Maybe remove?
 
+  def to(self, *args, **kwargs):
+    self = super().to(*args, **kwargs)
+    self.memory_cell = self.memory_cell.to(*args, **kwargs)
+    self.output_module = self.output_module.to(*args, **kwargs)
+
   def forward(self, features_sentence, features_entity):
     # Input is of shape (num_sents, batch_size * num_stories * num_entities, self.num_attributes)
     # We want to pass the stories into the memory cells sentence by sentence.
