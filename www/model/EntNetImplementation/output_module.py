@@ -3,17 +3,9 @@ import torch.nn as nn
 
 
 class OutputModule(nn.Module):
-  def __init__(self, config, num_blocks, input_all_tokens=True, device=None):
+  def __init__(self, config, memory_cell_hidden_size, num_blocks, input_all_tokens=True, device=None):
     super().__init__()
-    self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-    drop_out = getattr(config, "cls_dropout", None)
-    if drop_out is None:
-      drop_out = getattr(config, "dropout_rate", None)
-    if drop_out is None:
-      drop_out = getattr(config, "hidden_dropout_prob", None)
-    assert drop_out is not None, "Didn't set dropout!"
-    self.dropout = nn.Dropout(drop_out)
-    self.out_proj = nn.Linear(config.hidden_size, config.num_labels)
+    self.memory_cell_hidden_size = memory_cell_hidden_size
     self.num_labels = config.num_labels
     self.input_all_tokens = input_all_tokens
     self.device = device
@@ -32,8 +24,9 @@ class OutputModule(nn.Module):
 
     p_vals = []
     for h_i in chunked_states:
-      p_i = torch.softmax(x.t().matmul(h_i), dim=0)
+      p_i = torch.softmax((x * h_i).sum(dim=-1), dim=0)
       p_vals.append(p_i)
+      del p_i
 
     p = torch.cat(p_vals)
 
