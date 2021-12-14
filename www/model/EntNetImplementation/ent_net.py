@@ -30,7 +30,7 @@ class EntNetHead(nn.Module):
     states = None
     for i, sentence in enumerate(features_sentence): # Want to make a prediction at each of these
       states = self.memory_cell(sentence, states)
-      sentence_predictions = self.output_module(features_entity, states)
+      sentence_predictions = self.output_module(features_entity[i], states)
       sentence_predictions = self.output_layer(sentence_predictions)
       predictions[i] = sentence_predictions
 

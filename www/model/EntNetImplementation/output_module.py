@@ -31,7 +31,7 @@ class OutputModule(nn.Module):
       x = entity_encoding
 
     p_vals = []
-    for h_i in enumerate(chunked_states):
+    for h_i in chunked_states:
       p_i = torch.softmax(x.t().matmul(h_i), dim=0)
       p_vals.append(p_i)
 
