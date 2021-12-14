@@ -293,7 +293,7 @@ class TieredModelPipeline(nn.Module):
     out = out[0][:,0,:] # entity-sentence embeddings
 
     if self.use_entnet:
-      entnet_inputs = out.reshape(num_sents, batch_size * num_stories * num_entities, -1).long()
+      entnet_inputs = out.reshape(num_sents, batch_size * num_stories * num_entities, -1).float()
 
     # 2) State classification
     return_dict = {}
