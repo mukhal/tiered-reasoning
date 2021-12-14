@@ -196,8 +196,8 @@ class TieredModelPipeline(nn.Module):
         self.precondition_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
         self.effect_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
       else:
-        self.precondition_classifiers.append(EntNetHead(config, num_blocks=15, input_all_tokens=False).to(device))
-        self.effect_classifiers.append(EntNetHead(config, num_blocks=15, input_all_tokens=False).to(device))
+        self.precondition_classifiers.append(EntNetHead(config, num_blocks=15, input_all_tokens=False, device=device).to(device))
+        self.effect_classifiers.append(EntNetHead(config, num_blocks=15, input_all_tokens=False, device=device).to(device))
     
     # Conflict detector components
     embedding_proj_size = 256
@@ -293,7 +293,7 @@ class TieredModelPipeline(nn.Module):
     out = out[0][:,0,:] # entity-sentence embeddings
 
     if self.use_entnet:
-      entnet_inputs = input_ids.view(num_sents, batch_size * num_stories * num_entities, -1).long()
+      entnet_inputs = out.reshape(num_sents, batch_size * num_stories * num_entities, -1).long()
 
     # 2) State classification
     return_dict = {}

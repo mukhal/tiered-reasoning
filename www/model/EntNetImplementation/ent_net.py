@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 from www.model.EntNetImplementation.memory_cell import MemoryCell
@@ -5,11 +6,13 @@ from www.model.EntNetImplementation.output_module import OutputModule
 
 
 class EntNetHead(nn.Module):
-  def __init__(self, config, num_blocks=5, input_all_tokens=True):
+  def __init__(self, config, num_blocks=5, input_all_tokens=True, device=None):
     super().__init__()
-    self.memory_cell = MemoryCell(config, num_blocks, input_all_tokens)
-    self.output_module = OutputModule(config, input_all_tokens)
+    self.memory_cell = MemoryCell(config, num_blocks, input_all_tokens, device=device)
+    self.output_module = OutputModule(config, num_blocks, input_all_tokens, device=device)
     self.output_layer = nn.Linear(config.hidden_size, config.num_labels)  # Maybe remove?
+    self.num_labels = config.num_labels
+    self.device = device
 
   def to(self, *args, **kwargs):
     self = super().to(*args, **kwargs)
@@ -22,9 +25,14 @@ class EntNetHead(nn.Module):
     # We want to pass the stories into the memory cells sentence by sentence.
     # num_stories is 2, and so we want to have batch_size * 2 * num_entities number of states, passing sentences
     # through the head in a sequential manner.
+    output_shape = (features_sentence.shape[0], features_sentence.shape[1], self.num_labels)
+    predictions = torch.zeros(output_shape)
     states = None
-    for sentence in features_sentence:
+    for i, sentence in enumerate(features_sentence): # Want to make a prediction at each of these
       states = self.memory_cell(sentence, states)
+      sentence_predictions = self.output_module(features_entity, states)
+      sentence_predictions = self.output_layer(sentence_predictions)
+      predictions[i] = sentence_predictions
 
-    output = self.output_module(features_entity, states)
+    output = predictions.view(features_sentence.shape[0] * features_sentence.shape[1], self.num_labels)
     return output
