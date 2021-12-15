@@ -24,10 +24,10 @@ class OutputModule(nn.Module):
     p_vals = []
     for h_i in chunked_states:
       p_i = torch.softmax((x * h_i).sum(dim=-1), dim=0)
-      p_vals.append(p_i)
+      p_vals.append(p_i.unsqueeze(dim=0))
       del p_i
 
-    p = torch.cat(p_vals)
+    p = torch.cat(p_vals, dim=0)
 
     # Skip the calculation of u and y since p can be viewed as a distribution of potential answers
     return p
