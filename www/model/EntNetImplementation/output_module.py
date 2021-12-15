@@ -3,9 +3,8 @@ import torch.nn as nn
 
 
 class OutputModule(nn.Module):
-  def __init__(self, config, memory_cell_hidden_size, num_blocks, input_all_tokens=True, device=None):
+  def __init__(self, config, num_blocks, input_all_tokens=True, device=None):
     super().__init__()
-    self.memory_cell_hidden_size = memory_cell_hidden_size
     self.num_labels = config.num_labels
     self.input_all_tokens = input_all_tokens
     self.device = device
