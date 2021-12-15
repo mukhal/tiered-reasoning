@@ -3,10 +3,10 @@ import torch
 
 
 class MemoryCell(nn.Module):
-  def __init__(self, config, num_blocks=5, input_all_tokens=True, device=None):
+  def __init__(self, hidden_size, num_blocks=5, input_all_tokens=True, device=None):
     super().__init__()
 
-    self.hidden_size = config.hidden_size
+    self.hidden_size = hidden_size
 
     # Learnable parameters U, V, W can be viewed as linear layers with no bias
     self.U = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
