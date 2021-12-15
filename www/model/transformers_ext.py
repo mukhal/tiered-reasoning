@@ -199,8 +199,8 @@ class TieredModelPipeline(nn.Module):
         self.precondition_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
         self.effect_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
       else:
-        self.precondition_classifiers.append(EntNetHead(config, memory_hidden_size=100, num_blocks=15, input_all_tokens=False, device=device).to(device))
-        self.effect_classifiers.append(EntNetHead(config, memory_hidden_size=100, num_blocks=15, input_all_tokens=False, device=device).to(device))
+        self.precondition_classifiers.append(EntNetHead(config, memory_hidden_size=50, num_blocks=15, input_all_tokens=False, device=device).to(device))
+        self.effect_classifiers.append(EntNetHead(config, memory_hidden_size=50, num_blocks=15, input_all_tokens=False, device=device).to(device))
     
     # Conflict detector components
     embedding_proj_size = 256
@@ -500,6 +500,8 @@ class TieredModelPipeline(nn.Module):
 
   def check_gc(self):
     items_in_gc = 0
+    if self.tracking_gc is None:
+      self.tracking_gc = defaultdict(lambda: 0)
     new_gc_state = defaultdict(lambda: 0)
     for obj in gc.get_objects():
       try:
@@ -514,7 +516,8 @@ class TieredModelPipeline(nn.Module):
     print('differences:')
     for key in all_keys:
       change = new_gc_state[key] - self.tracking_gc[key]
-      print(key, change)
-      print(new_gc_state[key], self.tracking_gc[key])
+      if change:
+        print(key, change)
+      # print(new_gc_state[key], self.tracking_gc[key])
     del self.tracking_gc
     self.tracking_gc = new_gc_state
