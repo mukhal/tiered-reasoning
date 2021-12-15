@@ -1,4 +1,6 @@
+import gc
 import math
+from collections import defaultdict
 
 import torch
 import torch.nn as nn
@@ -170,6 +172,7 @@ class TieredModelPipeline(nn.Module):
   def __init__(self, embedding, num_sents, num_attributes, labels_per_att, config_class, model_name, device, ablation=[], loss_weights=[0.0, 0.4, 0.4, 0.2, 0.0], use_entnet=False): # labels_per_att is a dictionary mapping attribute index to number of labels
     super().__init__()
 
+    self.tracking_gc = None
     # Embedding and dropout
     self.embedding = embedding
     drop_out = getattr(embedding.config, "cls_dropout", None)
@@ -269,6 +272,9 @@ class TieredModelPipeline(nn.Module):
     length_mask = length_mask.view(batch_size * num_stories * num_entities, num_sents)
 
     # 1) Embed the inputs
+    print('Embed the inputs')
+    self.check_gc()
+
     if self.use_entnet:
       shaped_inputs = input_ids.transpose(0, 3).reshape(num_sents * batch_size * num_stories * num_entities, -1).long()
     else:
@@ -301,6 +307,9 @@ class TieredModelPipeline(nn.Module):
       entity_encoding = entity_encoding.reshape(num_sents, batch_size * num_stories * num_entities, -1)
 
     # 2) State classification
+    print('State classification')
+    self.check_gc()
+
     return_dict = {}
 
     loss_attributes = None
@@ -320,6 +329,9 @@ class TieredModelPipeline(nn.Module):
 
 
     # 2b) Precondition classification
+    print('Precondition classification')
+    self.check_gc()
+
     loss_preconditions = None
     loss_fct = CrossEntropyLoss()
     if preconditions is not None:
@@ -327,6 +339,8 @@ class TieredModelPipeline(nn.Module):
 
     out_preconditions = torch.zeros((batch_size * num_stories * num_entities * num_sents, self.num_attributes)).to(self.embedding.device)
     out_preconditions_softmax = torch.tensor([]).to(self.embedding.device)
+    print('PRE ENTNET')
+    self.check_gc()
     for i in range(self.num_attributes):
       if not self.use_entnet:
         out_s = self.precondition_classifiers[i](out, return_embeddings=False)
@@ -347,6 +361,9 @@ class TieredModelPipeline(nn.Module):
       if preconditions is not None:
         loss_preconditions += loss_fct(out_s.view(-1, self.precondition_classifiers[i].num_labels), preconditions[:, :, :, :, i].view(-1))
 
+    print('POST ENTNET')
+    self.check_gc()
+
     out_preconditions *= length_mask.view(-1).repeat(self.num_attributes, 1).t() # Mask out any nonexistent entities or sentences
     assert length_mask.view(-1).shape[0] == out_preconditions.shape[0]
     return_dict['out_preconditions'] = out_preconditions # * length_mask.view(-1).repeat(self.num_attributes, 1).t()
@@ -355,6 +372,9 @@ class TieredModelPipeline(nn.Module):
 
 
     # 2c) Effect classification
+    print('Effect classification')
+    self.check_gc()
+
     loss_effects = None
     loss_fct = CrossEntropyLoss()
     if effects is not None:
@@ -389,6 +409,9 @@ class TieredModelPipeline(nn.Module):
 
 
     # 3) Conflict detection
+    print('Conflict detection')
+    self.check_gc()
+
     if training and 'states-teacher-forcing' in self.ablation:
       out_preconditions = preconditions.view(batch_size * num_stories * num_entities * num_sents, self.num_attributes).float()
       out_effects = effects.view(batch_size * num_stories * num_entities * num_sents, self.num_attributes).float()
@@ -444,6 +467,9 @@ class TieredModelPipeline(nn.Module):
       return_dict['loss_conflicts'] = loss_conflicts
 
     # 4) Story choice classification
+    print('Story choice classification')
+    self.check_gc()
+
     out = out.view(batch_size, num_stories, num_entities, -1) # Reshape to one prediction per example-story-entity triples    
     out = -torch.sum(out, dim=(2,3)) / 2 # divide by 2 so the expected sum is 1 for conflicting story (2 conflicting sentences)
     return_dict['out_stories'] = out
@@ -471,3 +497,24 @@ class TieredModelPipeline(nn.Module):
       return_dict['total_loss'] = total_loss
 
     return return_dict
+
+  def check_gc(self):
+    items_in_gc = 0
+    new_gc_state = defaultdict(lambda: 0)
+    for obj in gc.get_objects():
+      try:
+        if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+          items_in_gc += 1
+          new_gc_state[(type(obj), obj.size())] += 1
+      except:
+        pass
+    print('-------------GC STATE-------------')
+    print('total tensors in gc:', items_in_gc)
+    all_keys = set(new_gc_state.keys()).union(set(self.tracking_gc.keys()))
+    print('differences:')
+    for key in all_keys:
+      change = new_gc_state[key] - self.tracking_gc[key]
+      print(key, change)
+      print(new_gc_state[key], self.tracking_gc[key])
+    del self.tracking_gc
+    self.tracking_gc = new_gc_state
