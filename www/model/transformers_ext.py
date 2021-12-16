@@ -199,9 +199,12 @@ class TieredModelPipeline(nn.Module):
         self.precondition_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
         self.effect_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
       else:
-        self.precondition_classifiers.append(EntNetHead(config, memory_hidden_size=50, num_blocks=15, input_all_tokens=False, device=device).to(device))
-        self.effect_classifiers.append(EntNetHead(config, memory_hidden_size=50, num_blocks=15, input_all_tokens=False, device=device).to(device))
-    
+        self.precondition_classifiers.append(EntNetHead(config, memory_hidden_size=1024, num_blocks=15, input_all_tokens=False, device=device).to(device))
+        self.effect_classifiers.append(EntNetHead(config, memory_hidden_size=1024, num_blocks=15, input_all_tokens=False, device=device).to(device))
+
+    self.precondition_classifiers = nn.ModuleList(self.precondition_classifiers)
+    self.effect_classifiers = nn.ModuleList(self.effect_classifiers)
+
     # Conflict detector components
     embedding_proj_size = 256
 
@@ -499,6 +502,10 @@ class TieredModelPipeline(nn.Module):
     return return_dict
 
   def check_gc(self):
+    debug_memory = False
+    if not debug_memory:
+      return
+    
     items_in_gc = 0
     if self.tracking_gc is None:
       self.tracking_gc = defaultdict(lambda: 0)

@@ -151,7 +151,6 @@ def train_epoch_tiered(model, optimizer, train_dataloader, device, seg_mode=Fals
   if val_lc_data is not None:
     val_lc_data.append([])
 
-  scaler = torch.cuda.amp.GradScaler()
   for step, batch in enumerate(train_dataloader):
     # Progress update
     if progress_update and step % 50 == 0 and not step == 0:
@@ -206,15 +205,12 @@ def train_epoch_tiered(model, optimizer, train_dataloader, device, seg_mode=Fals
               
     # Backward pass
     total_loss += loss.item()
-    scaler.scale(loss).backward()
-    # loss.backward()
+    loss.backward()
 
     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0) # Gradient clipping
 
-    # optimizer.step()
-    scaler.step(optimizer)
+    optimizer.step()
 
-    scaler.update()
     # Build learning curve data if needed
     if build_learning_curves:
       train_record = {'epoch': len(train_lc_data) - 1,
