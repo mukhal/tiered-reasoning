@@ -226,7 +226,7 @@ def train_epoch_tiered(model, optimizer, train_dataloader, device, seg_mode=Fals
       # Add a validation record 5 times per epoch
       chunk_size = len(train_dataloader) // 5
       if (len(train_dataloader) - step - 1) % chunk_size == 0:
-        validation_results = evaluate_tiered(model, val_dataloader, device, [(accuracy_score, 'accuracy'), (f1_score, 'f1')], seg_mode=False, return_explanations=True, return_losses=True, verbose=False)
+        validation_results = evaluate_tiered(model, val_dataloader, device, [(accuracy_score, 'accuracy'), (f1_score, 'f1')], seg_mode=False, return_explanations=True, return_losses=True, verbose=False, use_entnet=use_entnet)
         out = validation_results[16]
 
         val_record = {'epoch': len(val_lc_data) - 1,
