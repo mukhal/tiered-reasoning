@@ -123,7 +123,7 @@ def train_epoch(model, optimizer, train_dataloader, device, list_output=False, n
     return total_loss / len(train_dataloader), model
 
 # Train a state classification pipeline for one epoch
-def train_epoch_tiered(model, optimizer, train_dataloader, device, seg_mode=False, return_losses=False, build_learning_curves=False, val_dataloader=None, train_lc_data=None, val_lc_data=None, use_entnet=False):
+def train_epoch_tiered(model, optimizer, train_dataloader, device, seg_mode=False, return_losses=False, build_learning_curves=False, val_dataloader=None, train_lc_data=None, val_lc_data=None, use_entnet=False, scaler=None):
   t0 = time.time()
 
   total_loss = 0
@@ -206,11 +206,19 @@ def train_epoch_tiered(model, optimizer, train_dataloader, device, seg_mode=Fals
               
     # Backward pass
     total_loss += loss.item()
-    loss.backward()
+    if scaler is not None:
+      scaler.scale(loss).backward()
+      scaler.unscale_(optimizer)
+    else:
+      loss.backward()
 
     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0) # Gradient clipping
 
-    optimizer.step()
+    if scaler is not None:
+      scaler.step(optimizer)
+      scaler.update()
+    else:
+      optimizer.step()
 
     # Build learning curve data if needed
     if build_learning_curves:
