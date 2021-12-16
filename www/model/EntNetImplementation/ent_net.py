@@ -8,7 +8,7 @@ from www.model.EntNetImplementation.output_module import OutputModule
 class EntNetHead(nn.Module):
   def __init__(self, config, memory_hidden_size, num_blocks=5, input_all_tokens=True, device=None):
     super().__init__()
-    # self.embedding_projection = nn.Linear(config.hidden_size, memory_hidden_size)
+    self.embedding_projection = nn.Linear(config.hidden_size, memory_hidden_size)
     self.memory_cell = MemoryCell(memory_hidden_size, num_blocks, input_all_tokens, device=device)
     self.output_module = OutputModule(config, num_blocks, input_all_tokens, device=device)
     self.output_layer = nn.Linear(num_blocks, config.num_labels)
@@ -32,8 +32,8 @@ class EntNetHead(nn.Module):
       predictions = predictions.to(self.device)
 
     states = None
-    # features_sentence = self.embedding_projection(features_sentence)
-    # features_entity = self.embedding_projection(features_entity)
+    features_sentence = self.embedding_projection(features_sentence)
+    features_entity = self.embedding_projection(features_entity)
     for i, sentence in enumerate(features_sentence): # Want to make a prediction at each of these
       states = self.memory_cell(sentence, states)
       sentence_predictions = self.output_module(features_entity[i], states)

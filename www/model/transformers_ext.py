@@ -199,8 +199,8 @@ class TieredModelPipeline(nn.Module):
         self.precondition_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
         self.effect_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
       else:
-        self.precondition_classifiers.append(EntNetHead(config, memory_hidden_size=1024, num_blocks=15, input_all_tokens=False, device=device).to(device))
-        self.effect_classifiers.append(EntNetHead(config, memory_hidden_size=1024, num_blocks=15, input_all_tokens=False, device=device).to(device))
+        self.precondition_classifiers.append(EntNetHead(config, memory_hidden_size=100, num_blocks=15, input_all_tokens=False, device=device).to(device))
+        self.effect_classifiers.append(EntNetHead(config, memory_hidden_size=100, num_blocks=15, input_all_tokens=False, device=device).to(device))
 
     self.precondition_classifiers = nn.ModuleList(self.precondition_classifiers)
     self.effect_classifiers = nn.ModuleList(self.effect_classifiers)
@@ -275,8 +275,7 @@ class TieredModelPipeline(nn.Module):
     length_mask = length_mask.view(batch_size * num_stories * num_entities, num_sents)
 
     # 1) Embed the inputs
-    print('Embed the inputs')
-    self.check_gc()
+    self.check_gc('Embed the inputs')
 
     if self.use_entnet:
       shaped_inputs = input_ids.transpose(0, 3).reshape(num_sents * batch_size * num_stories * num_entities, -1).long()
@@ -310,8 +309,7 @@ class TieredModelPipeline(nn.Module):
       entity_encoding = entity_encoding.reshape(num_sents, batch_size * num_stories * num_entities, -1)
 
     # 2) State classification
-    print('State classification')
-    self.check_gc()
+    self.check_gc('State classification')
 
     return_dict = {}
 
@@ -332,8 +330,7 @@ class TieredModelPipeline(nn.Module):
 
 
     # 2b) Precondition classification
-    print('Precondition classification')
-    self.check_gc()
+    self.check_gc('Precondition classification')
 
     loss_preconditions = None
     loss_fct = CrossEntropyLoss()
@@ -342,8 +339,7 @@ class TieredModelPipeline(nn.Module):
 
     out_preconditions = torch.zeros((batch_size * num_stories * num_entities * num_sents, self.num_attributes)).to(self.embedding.device)
     out_preconditions_softmax = torch.tensor([]).to(self.embedding.device)
-    print('PRE ENTNET')
-    self.check_gc()
+    self.check_gc('PRE ENTNET')
     for i in range(self.num_attributes):
       if not self.use_entnet:
         out_s = self.precondition_classifiers[i](out, return_embeddings=False)
@@ -364,8 +360,7 @@ class TieredModelPipeline(nn.Module):
       if preconditions is not None:
         loss_preconditions += loss_fct(out_s.view(-1, self.precondition_classifiers[i].num_labels), preconditions[:, :, :, :, i].view(-1))
 
-    print('POST ENTNET')
-    self.check_gc()
+    self.check_gc('POST ENTNET')
 
     out_preconditions *= length_mask.view(-1).repeat(self.num_attributes, 1).t() # Mask out any nonexistent entities or sentences
     assert length_mask.view(-1).shape[0] == out_preconditions.shape[0]
@@ -375,8 +370,7 @@ class TieredModelPipeline(nn.Module):
 
 
     # 2c) Effect classification
-    print('Effect classification')
-    self.check_gc()
+    self.check_gc('Effect classification')
 
     loss_effects = None
     loss_fct = CrossEntropyLoss()
@@ -412,8 +406,7 @@ class TieredModelPipeline(nn.Module):
 
 
     # 3) Conflict detection
-    print('Conflict detection')
-    self.check_gc()
+    self.check_gc('Conflict detection')
 
     if training and 'states-teacher-forcing' in self.ablation:
       out_preconditions = preconditions.view(batch_size * num_stories * num_entities * num_sents, self.num_attributes).float()
@@ -470,8 +463,7 @@ class TieredModelPipeline(nn.Module):
       return_dict['loss_conflicts'] = loss_conflicts
 
     # 4) Story choice classification
-    print('Story choice classification')
-    self.check_gc()
+    self.check_gc('Story choice classification')
 
     out = out.view(batch_size, num_stories, num_entities, -1) # Reshape to one prediction per example-story-entity triples    
     out = -torch.sum(out, dim=(2,3)) / 2 # divide by 2 so the expected sum is 1 for conflicting story (2 conflicting sentences)
@@ -501,11 +493,12 @@ class TieredModelPipeline(nn.Module):
 
     return return_dict
 
-  def check_gc(self):
+  def check_gc(self, log_msg):
     debug_memory = False
     if not debug_memory:
       return
-    
+
+    print(log_msg)
     items_in_gc = 0
     if self.tracking_gc is None:
       self.tracking_gc = defaultdict(lambda: 0)
