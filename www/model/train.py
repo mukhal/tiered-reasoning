@@ -166,7 +166,8 @@ def train_epoch_tiered(model, optimizer, train_dataloader, device, seg_mode=Fals
     effects = batch[6].long().to(device)
     conflicts = batch[7].long().to(device)
     labels = batch[8].long().to(device)
-    entity_encoding = batch[9].long().to(device)
+    if use_entnet:
+      entity_encoding = batch[9].long().to(device)
 
     if seg_mode:
       segment_ids = batch[8].to(device)
