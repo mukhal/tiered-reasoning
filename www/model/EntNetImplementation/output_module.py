@@ -3,14 +3,15 @@ import torch.nn as nn
 
 
 class OutputModule(nn.Module):
-  def __init__(self, config, num_blocks, input_all_tokens=True, device=None):
+  def __init__(self, config, hidden_size, num_blocks, input_all_tokens=True, device=None):
     super().__init__()
     self.num_labels = config.num_labels
     self.input_all_tokens = input_all_tokens
     self.device = device
     self.num_blocks = num_blocks
-    self.R = nn.Linear(self.num_blocks, self.num_blocks, bias=False)
-    self.H = nn.Linear(self.num_blocks, self.num_blocks, bias=False)
+    self.hidden_size = hidden_size
+    self.R = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+    self.H = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
     self.activation = nn.PReLU(self.hidden_size, init=1.0)
 
 
@@ -25,10 +26,11 @@ class OutputModule(nn.Module):
     else:
       x = entity_encoding
 
-    u = torch.zeros(states.shape[0], self.num_blocks)
+    # u will be batch size * hidden size
+    u = torch.zeros(states.shape[0], self.hidden_size)
     for i, h_i in enumerate(chunked_states):
       p_i = torch.softmax((x * h_i).sum(dim=-1), dim=0)
-      u[i,:] = p_i * h_i
+      u[i,:] = p_i.matmul(h_i)
       del p_i
 
     y = self.R(self.activation(x + self.H(u)))

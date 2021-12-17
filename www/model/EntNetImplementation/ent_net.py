@@ -10,7 +10,7 @@ class EntNetHead(nn.Module):
     super().__init__()
     self.embedding_projection = nn.Linear(config.hidden_size, memory_hidden_size)
     self.memory_cell = MemoryCell(memory_hidden_size, num_blocks, input_all_tokens, device=device)
-    self.output_module = OutputModule(config, num_blocks, input_all_tokens, device=device)
+    self.output_module = OutputModule(config, memory_hidden_size, num_blocks, input_all_tokens, device=device)
     self.output_layer = nn.Linear(num_blocks, config.num_labels)
     self.num_labels = config.num_labels
     self.device = device
