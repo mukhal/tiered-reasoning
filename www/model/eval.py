@@ -276,6 +276,7 @@ def evaluate_tiered(model, eval_dataloader, device, metrics, seg_mode=False, ret
       segment_ids = batch[9].to(device)
     elif use_entnet:
       entity_encoding = batch[9].long().to(device)
+      segment_ids = None
     else:
       segment_ids = None
 
