@@ -37,9 +37,7 @@ class EntNetHead(nn.Module):
     for i, sentence in enumerate(features_sentence): # Want to make a prediction at each of these
       states = self.memory_cell(sentence, states)
       sentence_predictions = self.output_module(features_entity[i], states)
-      # Each p_i comes from a memory cell, so we should have batch_size * num_blocks for sentence_predictions
-      # so predict from memory cell outputs
-      sentence_predictions = self.output_layer(sentence_predictions.t())
+      # batch_size * num_labels for sentence_predictions coming from the output module
       predictions[i,:,:] = sentence_predictions
       del sentence_predictions
 

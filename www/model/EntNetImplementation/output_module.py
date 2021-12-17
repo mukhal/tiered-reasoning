@@ -10,7 +10,7 @@ class OutputModule(nn.Module):
     self.device = device
     self.num_blocks = num_blocks
     self.hidden_size = hidden_size
-    self.R = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+    self.R = nn.Linear(self.hidden_size, config.num_labels, bias=False)
     self.H = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
     self.activation = nn.PReLU(self.hidden_size, init=1.0)
 
