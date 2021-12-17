@@ -27,7 +27,7 @@ class OutputModule(nn.Module):
       x = entity_encoding
 
     # u will be batch size * hidden size
-    u = torch.zeros(states.shape[0], self.hidden_size)
+    u = torch.zeros(states.shape[0], self.hidden_size).to(self.device)
     for i, h_i in enumerate(chunked_states):
       p_i = torch.softmax((x * h_i).sum(dim=-1), dim=0)
       u[i,:] = p_i.matmul(h_i)
