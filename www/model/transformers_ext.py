@@ -199,8 +199,8 @@ class TieredModelPipeline(nn.Module):
         self.precondition_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
         self.effect_classifiers.append(ClassificationHead(config, input_all_tokens=False).to(device))
       else:
-        self.precondition_classifiers.append(EntNetHead(config, memory_hidden_size=50, num_blocks=5, input_all_tokens=False, device=device).to(device))
-        self.effect_classifiers.append(EntNetHead(config, memory_hidden_size=50, num_blocks=5, input_all_tokens=False, device=device).to(device))
+        self.precondition_classifiers.append(EntNetHead(config, memory_hidden_size=32, num_blocks=4, input_all_tokens=False, device=device).to(device))
+        self.effect_classifiers.append(EntNetHead(config, memory_hidden_size=32, num_blocks=4, input_all_tokens=False, device=device).to(device))
 
     self.precondition_classifiers = nn.ModuleList(self.precondition_classifiers)
     self.effect_classifiers = nn.ModuleList(self.effect_classifiers)
