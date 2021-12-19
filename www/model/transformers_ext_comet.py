@@ -10,6 +10,8 @@ sys.path.append('../comet-commonsense/')
 import src.data.data as data
 import src.data.config as cfg
 import src.interactive.functions as interactive
+import src.train.utils as train_utils
+import src.models.utils as comet_utils
 
 from transformers import RobertaForMultipleChoice, BertForMultipleChoice, BertModel, RobertaModel, DebertaModel, DebertaPreTrainedModel
 from transformers.models.deberta.modeling_deberta import ContextPooler, StableDropout
@@ -173,28 +175,30 @@ class TieredModelCometPipeline(nn.Module):
   def __init__(self, embedding, num_sents, num_attributes, labels_per_att, config_class, model_name, device, 
   ablation=[], 
   loss_weights=[0.0, 0.4, 0.4, 0.2, 0.0],
-  pretrained_comet_model = None): # labels_per_att is a dictionary mapping attribute index to number of labels
+  pretrained_comet_model = None, comet_vocab=None): # labels_per_att is a dictionary mapping attribute index to number of labels
     super().__init__()
-
-  
+    if pretrained_comet_model:
+      print("Got COMET Model!")
+    
+    self.comet_vocab = comet_vocab
+    
     # Embedding and dropout
-    self.embedding = embedding
-    drop_out = getattr(embedding.config, "cls_dropout", None)
-    if drop_out is None:
-      drop_out = getattr(embedding.config, "dropout_rate", None)
-    if drop_out is None:
-      drop_out = getattr(embedding.config, "hidden_dropout_prob", None)
-    assert drop_out is not None, "Didn't set dropout!"
-    self.dropout = nn.Dropout(drop_out)   
+    self.comet = pretrained_comet_model # use pretrained comet model as embedding
+    self.comet_hidden_size = self.comet.transformer.embed.embedding_dim
 
     # State classifiers
     self.num_attributes = num_attributes
     self.labels_per_att = labels_per_att
     self.num_state_labels = sum(list(labels_per_att.values()))
 
-    self.attribute_classifier = nn.Linear(embedding.config.hidden_size, num_attributes)
+    self.attribute_classifier = nn.Linear(self.comet_hidden_size, num_attributes)
 
     config = config_class.from_pretrained(model_name)
+    setattr(config, 'dropout_rate', config.attn_pdrop) # set dropout rate
+    drop_out = config.attn_pdrop
+    self.dropout = nn.Dropout(drop_out)   
+
+
     self.precondition_classifiers = []
     self.effect_classifiers = []
     for i in range(num_attributes):
@@ -228,7 +232,7 @@ class TieredModelCometPipeline(nn.Module):
 
     # Project to same size
     if 'embeddings' not in ablation:
-      self.embedding_proj = nn.Linear(embedding.config.hidden_size, embedding_proj_size)
+      self.embedding_proj = nn.Linear(self.comet_hidden_size, embedding_proj_size)
     if 'states' not in ablation:
       self.states_proj = nn.Linear(self.states_size, embedding_proj_size)
     if 'states-attention' in ablation:
@@ -252,6 +256,9 @@ class TieredModelCometPipeline(nn.Module):
     self.ablation = ablation
     self.loss_weights = loss_weights
 
+    self.device = device
+
+
 
   def forward(self, input_ids, input_lengths, input_entities, attention_mask=None, token_type_ids=None, attributes=None, preconditions=None, effects=None, conflicts=None, labels=None, training=False):
 
@@ -270,26 +277,24 @@ class TieredModelCometPipeline(nn.Module):
       length_mask[input_entities <= i, i, :] = 0 # Use input entity counts to zero out state and conflict preds wherever there isn't an entity
     length_mask = length_mask.view(batch_size * num_stories * num_entities, num_sents)
 
-    # 1) Embed the inputs
-    if token_type_ids is not None:
-      print(token_type_ids)
-      print(token_type_ids.shape)
-      out = self.embedding(
-              input_ids.view(batch_size * num_stories * num_entities * num_sents, -1).long(),
-              attention_mask=attention_mask.view(batch_size * num_stories * num_entities * num_sents, -1) if attention_mask is not None else None,
-              token_type_ids=token_type_ids.view(batch_size * num_stories * num_entities * num_sents, -1),
-              output_hidden_states=False)
-    else:
-      out = self.embedding(
-              input_ids.view(batch_size * num_stories * num_entities * num_sents, -1).long(),
-              attention_mask=attention_mask.view(batch_size * num_stories * num_entities * num_sents, -1) if attention_mask is not None else None,
-              output_hidden_states=False)
+    input_ids_shaped = input_ids.view(batch_size * num_stories * num_entities * num_sents, -1, 1).long() # Flatten and unsqueeze(-1)
+    attention_mask= attention_mask.view(batch_size * num_stories * num_entities * num_sents, -1)
+
+    input_seq_to_comet = comet_utils.prepare_position_embeddings(None, self.comet_vocab, input_ids_shaped) # (B , L , 2)
+
+    out = self.comet(
+            input_seq_to_comet,
+            attention_mask)
       
-    if len(out[0].shape) < 3:
-      out[0] = out[0].unsqueeze(0)
-    out = out[0][:,0,:] # entity-sentence embeddings
+    out = out["embed"] # get embeddings
 
-
+    if len(out.shape) < 3:
+      out = out.unsqueeze(0)
+    
+    #out = out[0][:,0,:] # entity-sentence embeddings
+    #out = out.mean(dim=1) # entity-sentence embeddings with average pooling
+    out = out.max(dim=1)[0] # entity-sentence embeddings with max pooling
+    
     # 2) State classification
     return_dict = {}
 
@@ -315,8 +320,8 @@ class TieredModelCometPipeline(nn.Module):
     if preconditions is not None:
       loss_preconditions = 0.0
 
-    out_preconditions = torch.zeros((batch_size * num_stories * num_entities * num_sents, self.num_attributes)).to(self.embedding.device)
-    out_preconditions_softmax = torch.tensor([]).to(self.embedding.device)
+    out_preconditions = torch.zeros((batch_size * num_stories * num_entities * num_sents, self.num_attributes)).to(self.device)
+    out_preconditions_softmax = torch.tensor([]).to(self.device)
     for i in range(self.num_attributes):
       out_s = self.precondition_classifiers[i](out, return_embeddings=False)
 
@@ -346,8 +351,8 @@ class TieredModelCometPipeline(nn.Module):
     if effects is not None:
       loss_effects = 0.0
 
-    out_effects = torch.zeros((batch_size * num_stories * num_entities * num_sents, self.num_attributes)).to(self.embedding.device)
-    out_effects_softmax = torch.tensor([]).to(self.embedding.device)
+    out_effects = torch.zeros((batch_size * num_stories * num_entities * num_sents, self.num_attributes)).to(self.device)
+    out_effects_softmax = torch.tensor([]).to(self.device)
     for i in range(self.num_attributes):
       out_s = self.effect_classifiers[i](out, return_embeddings=False)
       with torch.no_grad(): # Don't allow backprop from conflict detection to state classifiers
@@ -403,7 +408,7 @@ class TieredModelCometPipeline(nn.Module):
       out = torch.cat((out, out_states), dim=-1)
 
     # Pad with a few zeros
-    out = torch.cat((out, torch.zeros(out.shape[:-1] + (self.encoding_pad_zeros,)).to(self.embedding.device)), dim=-1)
+    out = torch.cat((out, torch.zeros(out.shape[:-1] + (self.encoding_pad_zeros,)).to(self.device)), dim=-1)
     out = out.view(batch_size * num_stories * num_entities, num_sents, -1)
 
     # Run through transformer
